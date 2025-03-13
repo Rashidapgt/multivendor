@@ -1,32 +1,40 @@
-const Product=require('../models/productmodel')
-const {cloudinary}=require('../config/cloudinary')
-const multer = require('multer');
-
-
+const Product = require('../models/productmodel');
+const { cloudinary, uploadMiddleware } = require('../config/cloudinary'); // Import the uploadMiddleware
+const Category=require('../models/categorymodel')
 
 // Create Product (Vendor only)
 exports.createProduct = async (req, res) => {
     try {
-        upload(req, res, async (err) => {
+        uploadMiddleware.single('file')(req, res, async (err) => {  // Use uploadMiddleware here
             if (err) return res.status(400).json({ message: err.message });
 
             const { name, description, price, category, stock } = req.body;
+            
             if (req.user.role !== 'vendor') {
                 return res.status(403).json({ message: 'Only vendors can create products' });
             }
 
-            let imageUrl = null;
-            if (req.file) {
-                const result = await cloudinary.uploader.upload_stream({ folder: "products" }, (error, result) => {
-                    if (error) return res.status(500).json({ error: error.message });
-                    imageUrl = result.secure_url;
-                }).end(req.file.buffer);
+            // Check if category is an ObjectId and validate if it exists
+            const categoryDoc = await Category.findById(category);
+            if (!categoryDoc) {
+                return res.status(400).json({ message: 'Category not found' });
             }
 
+            let imageUrl = null;
+            if (req.file) {
+                const result = await cloudinary.uploader.upload(req.file.path, { folder: "products" });
+                imageUrl = result.secure_url; // Save the Cloudinary URL to the product image
+            }
+
+            // Create new product and save
             const newProduct = new Product({
-                name, description, price, category, stock,
+                name,
+                description,
+                price,
+                category: categoryDoc._id,  // Make sure to use the ObjectId here
+                stock,
                 images: imageUrl,
-                vendor: req.user._id
+                vendor: req.user._id  // Assuming req.user._id is the logged-in vendor's ID
             });
 
             await newProduct.save();
@@ -37,31 +45,11 @@ exports.createProduct = async (req, res) => {
     }
 };
 
-// Get all products
-exports.getAllProducts = async (req, res) => {
-    try {
-        const products = await Product.find().populate('category').populate('vendor', 'name email');
-        res.status(200).json(products);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
 
-// Get product by ID
-exports.getProductById = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id).populate('category').populate('vendor', 'name email');
-        if (!product) return res.status(404).json({ message: 'Product not found' });
-        res.status(200).json(product);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-// Update product (Vendor/Admin)
+// Update Product (Vendor/Admin)
 exports.updateProduct = async (req, res) => {
     try {
-        upload(req, res, async (err) => {
+        uploadMiddleware.single('file')(req, res, async (err) => { // Use uploadMiddleware here
             if (err) return res.status(400).json({ message: err.message });
 
             const { id } = req.params;
@@ -74,12 +62,19 @@ exports.updateProduct = async (req, res) => {
                 return res.status(403).json({ message: 'Unauthorized to update this product' });
             }
 
+            let categoryId = product.category; // Default to current category if not updated
+            if (category) {
+                const categoryDoc = await category.findOne({ name: category });
+                if (!categoryDoc) {
+                    return res.status(400).json({ message: 'Category not found' });
+                }
+                categoryId = categoryDoc._id; // Use the ObjectId of the category
+            }
+
             let newImageUrl = product.images;
             if (req.file) {
-                const result = await cloudinary.uploader.upload_stream({ folder: "products" }, (error, result) => {
-                    if (error) return res.status(500).json({ error: error.message });
-                    newImageUrl = result.secure_url;
-                }).end(req.file.buffer);
+                const result = await cloudinary.uploader.upload(req.file.path, { folder: "products" });
+                newImageUrl = result.secure_url; // Save the new Cloudinary URL
             }
 
             product.name = name || product.name;
@@ -97,7 +92,7 @@ exports.updateProduct = async (req, res) => {
     }
 };
 
-// Delete product (Admin only)
+// Delete Product (Admin only)
 exports.deleteProduct = async (req, res) => {
     try {
         const { id } = req.params;

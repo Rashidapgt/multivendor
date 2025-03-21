@@ -1,6 +1,7 @@
 const Product = require('../models/productmodel');
 const { cloudinary, uploadMiddleware } = require('../config/cloudinary'); // Import the uploadMiddleware
 const Category=require('../models/categorymodel')
+const mongoose = require("mongoose");
 
 // Create Product (Vendor only)
 exports.createProduct = async (req, res) => {
@@ -44,6 +45,62 @@ exports.createProduct = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+
+
+
+// Get all Products (Public access)
+exports.getAllProducts = async (req, res) => {
+    try {
+        const { category } = req.query;
+        let filter = {};
+
+        if (category) {
+            if (!mongoose.Types.ObjectId.isValid(category)) {
+                return res.status(400).json({ message: "Invalid category ID" });
+            }
+            filter.category = category; // Filtering by category ID
+        }
+
+        const products = await Product.find(filter)
+            .populate("category", "name")
+            .populate("vendor", "name")
+            .exec();
+
+        if (!products.length) {
+            return res.status(404).json({ message: "No products found for this category" });
+        }
+
+        res.status(200).json({ products });
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+
+
+// Get a Product by ID (Public access)
+exports.getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const product = await Product.findById(id)
+            .populate('category', 'name')  // Populate category name
+            .populate('vendor', 'name')    // Populate vendor name (optional)
+            .exec();
+
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        res.status(200).json({ product });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+
 
 
 // Update Product (Vendor/Admin)

@@ -11,8 +11,8 @@ const {
 
 // Routes
 router.post("/", auth, vendorOnly, createProduct); // Vendor can create product
-/*router.get("/", getAllProducts); // Public: Get all products
-router.get("/:id", getProductById); // Public: Get product by ID*/
+router.get("/", getAllProducts); // Public: Get all products
+router.get("/:id", getProductById); // Public: Get product by ID
 router.put("/:id", auth, vendorOnly, updateProduct); // Vendor/Admin can update
 router.delete("/:id", auth, adminOnly, deleteProduct); // Admin can delete
 

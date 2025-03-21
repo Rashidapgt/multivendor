@@ -29,18 +29,23 @@ const calculateEstimatedDeliveryTime = (userLocation) => {
 };
 
 exports.applyCoupon = async (req, res) => {
-  const { code, userLocation } = req.body;  // Include userLocation for shipping and tax calculations
+  const { code, userLocation } = req.body;
   const userId = req.user._id;
+
+  // Validate user location
+  if (!userLocation || !userLocation.country) {
+    return res.status(400).json({ message: 'User location is required' });
+  }
 
   try {
     const cart = await Cart.findOne({ userId }).populate('items.productId');
     if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
+      return res.status(404).json({ message: `Cart not found for user ${userId}` });
     }
 
-    const coupon = await Coupon.findOne({ code });
+    const coupon = await Coupon.findOne({ code: code.toUpperCase() });
     if (!coupon) {
-      return res.status(400).json({ message: 'Invalid coupon code' });
+      return res.status(400).json({ message: `Coupon code ${code} not found` });
     }
 
     // Check if the coupon is valid
@@ -69,6 +74,13 @@ exports.applyCoupon = async (req, res) => {
 
     // Calculate final price after coupon discount, shipping, and tax
     const finalPrice = discountedAmount + shippingFee + tax;
+    cart.appliedCoupon = {
+      code: coupon.code,
+      discountPercentage: coupon.discountPercentage,
+      discountAmount: discount,
+    };
+    cart.totalAfterDiscount = discountedAmount;
+    await cart.save();
 
     // Return the response with all calculated values
     res.status(200).json({
@@ -80,6 +92,7 @@ exports.applyCoupon = async (req, res) => {
       finalPrice,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error applying coupon:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 };

@@ -1,4 +1,5 @@
 const express=require('express')
+const cors=require('cors')
 require('dotenv').config()
 const connectDB=require('./src/config/db')
 connectDB()
@@ -20,6 +21,13 @@ const {cloudinary}=require('./src/config/cloudinary')
 
 app.use(express.json())
 app.use(cookieParser());
+app.use(cors({
+    origin:process.env.FRONTEND_URL,
+    credentials:true,
+    methods:['GET','POST','PUT','DELETE'],
+    allowedHeaders:['Content-Type','Authorization']
+}))
+
 
 app.use('/api/users',  userRoute);
 app.use('/api/products',  productRoute);
